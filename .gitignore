@@ -1,0 +1,85 @@
+# =========================
+# Node / dependencias
+# =========================
+node_modules/
+**/node_modules/
+
+# =========================
+# Variables de entorno
+# =========================
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Permitir plantillas de ejemplo
+!.env.example
+!**/.env.example
+
+# =========================
+# Logs
+# =========================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# =========================
+# Builds
+# =========================
+dist/
+build/
+out/
+.next/
+**/.next/
+
+# =========================
+# Archivos temporales
+# =========================
+tmp/
+temp/
+.cache/
+**/.cache/
+
+# =========================
+# Sistema operativo
+# =========================
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# =========================
+# Editores
+# =========================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# =========================
+# Bases de datos locales
+# =========================
+*.sqlite
+*.sqlite3
+*.db
+
+# =========================
+# Archivos que NO quieres subir
+# =========================
+*.pdf
+Money_Hero_Swagger.yaml
+*.swagger.yaml
+*Swagger*.yaml
+*swagger*.yaml
+
+# =========================
+# Backups / comprimidos
+# =========================
+*.zip
+*.rar
+*.7z
+*.tar
+*.gz
+*.bak
+*.backup
