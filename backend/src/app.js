@@ -24,7 +24,7 @@ app.get('/', (req, res) => {
     });
 });
 
-//app.use(routes);
-//app.use(errorMiddleware);
+app.use(routes);
+app.use(errorMiddleware);
 
 export default app;
