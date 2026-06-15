@@ -1,4 +1,4 @@
-export function caluclateLevel(totalXp) {
+export function calculateLevel(totalXp) {
     return Math.floor(totalXp / 250) + 1;
 }
 
@@ -10,6 +10,6 @@ export function calculateLeague(level) {
 }
 
 export function xpToNewLevel(totalXp) {
-    const currentLevel = calculateLeague(totalXp);
+    const currentLevel = calculateLevel(totalXp);
     return currentLevel * 250 - totalXp;
 }

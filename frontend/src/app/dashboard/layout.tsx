@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import {
   Flag,
   Flame,
@@ -16,8 +16,8 @@ import {
   Zap,
 } from "lucide-react";
 import { player } from "@/lib/demoData";
-
-const DEMO_USER_KEY = "moneyhero_demo_user";
+import { logout, type AuthUser } from "@/lib/api";
+import { clearSession, getStoredUser, getToken } from "@/lib/session";
 
 const navItems = [
   { href: "/dashboard", label: "Inicio", icon: Home },
@@ -30,15 +30,32 @@ const navItems = [
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
   const pathname = usePathname();
-  const [isDemo, setIsDemo] = useState(false);
+  const [user, setUser] = useState<AuthUser | null>(null);
 
   useEffect(() => {
-    setIsDemo(window.localStorage.getItem(DEMO_USER_KEY) === "true");
-  }, []);
+    // Session lives in localStorage, only readable client-side after mount.
+    const storedUser = getStoredUser();
+    if (storedUser && getToken()) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setUser(storedUser);
+      return;
+    }
 
-  function handleExit() {
-    window.localStorage.removeItem(DEMO_USER_KEY);
+    router.replace("/");
+  }, [router]);
+
+  async function handleExit() {
+    const token = getToken();
+    if (token) {
+      try {
+        await logout(token);
+      } catch {
+        // ignore network errors, clear session locally regardless
+      }
+    }
+    clearSession();
   }
 
   return (
@@ -53,6 +70,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </Link>
 
           <div className="flex flex-wrap items-center gap-3">
+            {user && (
+              <span className="text-sm font-bold text-mh-dark/70">
+                Hola, {user.name}
+              </span>
+            )}
             <div className="flex items-center gap-1.5 rounded-full bg-mh-dark/5 px-3 py-1.5 text-sm font-bold text-mh-dark">
               <Zap size={16} className="text-mh-gold" /> {player.xp.toLocaleString("es-HN")} XP
             </div>
@@ -92,14 +114,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </nav>
       </header>
 
-      <main className="mx-auto max-w-6xl px-6 py-8">
-        {isDemo && (
-          <div className="mb-6 rounded-2xl border-2 border-mh-gold/50 bg-mh-gold/10 px-4 py-3 text-sm font-semibold text-mh-dark">
-            🎮 Estás en modo demo — estos datos son de ejemplo.
-          </div>
-        )}
-        {children}
-      </main>
+      <main className="mx-auto max-w-6xl px-6 py-8">{children}</main>
     </div>
   );
 }

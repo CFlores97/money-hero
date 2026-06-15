@@ -23,6 +23,7 @@ interface GameButtonProps {
   type?: "button" | "submit";
   className?: string;
   onClick?: MouseEventHandler;
+  disabled?: boolean;
 }
 
 export default function GameButton({
@@ -32,8 +33,11 @@ export default function GameButton({
   type = "button",
   className = "",
   onClick,
+  disabled = false,
 }: GameButtonProps) {
-  const classes = `${baseClasses} ${variantClasses[variant]} ${className}`;
+  const classes = `${baseClasses} ${variantClasses[variant]} ${className} ${
+    disabled ? "cursor-not-allowed opacity-60" : ""
+  }`;
 
   if (href) {
     return (
@@ -44,7 +48,7 @@ export default function GameButton({
   }
 
   return (
-    <button type={type} className={classes} onClick={onClick}>
+    <button type={type} className={classes} onClick={onClick} disabled={disabled}>
       {children}
     </button>
   );
