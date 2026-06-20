@@ -1,10 +1,17 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { ArrowDownLeft, ArrowUpRight, Wallet, X } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Trash2, Wallet, X } from "lucide-react";
 import GameButton from "@/components/GameButton";
-import { stats, transactions as demoTransactions } from "@/lib/demoData";
-import { ApiError, createTransaction, getCategories, type Category } from "@/lib/api";
+import {
+  ApiError,
+  createTransaction,
+  deleteTransaction,
+  getCategories,
+  getTransactions,
+  type Category,
+  type Transaction,
+} from "@/lib/api";
 import { getToken } from "@/lib/session";
 
 const currency = new Intl.NumberFormat("es-HN", {
@@ -15,17 +22,11 @@ const currency = new Intl.NumberFormat("es-HN", {
 
 const dateFormatter = new Intl.DateTimeFormat("es-HN", { day: "numeric", month: "short" });
 
-interface DisplayTransaction {
-  id: string | number;
-  title: string;
-  category: string;
-  date: string;
-  amount: number;
-}
-
 export default function TransactionsPage() {
-  const [transactions, setTransactions] = useState<DisplayTransaction[]>(demoTransactions);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [total, setTotal] = useState(0);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [token, setToken] = useState<string | null>(null);
 
@@ -35,34 +36,34 @@ export default function TransactionsPage() {
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [description, setDescription] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    // Token lives in localStorage, only readable client-side after mount.
     const storedToken = getToken();
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setToken(storedToken);
+    if (!storedToken) return;
 
-    if (storedToken) {
-      getCategories(storedToken)
-        .then(setCategories)
-        .catch(() => setCategories([]));
-    }
+    Promise.all([getTransactions(storedToken), getCategories(storedToken)])
+      .then(([result, cats]) => {
+        setTransactions(result.data);
+        setTotal(result.total);
+        setCategories(cats);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
-  const availableCategories = categories.filter(
-    (category) => category.type === type || category.type === "both"
-  );
+  const availableCategories = categories.filter((c) => c.type === type || c.type === "both");
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!token) return;
 
     setError(null);
-    setLoading(true);
+    setSubmitting(true);
 
     try {
-      await createTransaction(token, {
+      const transaction = await createTransaction(token, {
         type,
         amount: Number(amount),
         categoryId,
@@ -70,26 +71,26 @@ export default function TransactionsPage() {
         description: description || null,
       });
 
-      const categoryName = categories.find((c) => c.id === categoryId)?.name ?? "Otro";
-
-      setTransactions((prev) => [
-        {
-          id: crypto.randomUUID(),
-          title: description || categoryName,
-          category: categoryName,
-          date,
-          amount: type === "income" ? Number(amount) : -Number(amount),
-        },
-        ...prev,
-      ]);
-
+      setTransactions((prev) => [transaction, ...prev]);
+      setTotal((prev) => prev + 1);
       setAmount("");
       setDescription("");
       setShowForm(false);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No se pudo guardar la transacción.");
     } finally {
-      setLoading(false);
+      setSubmitting(false);
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!token) return;
+    try {
+      await deleteTransaction(token, id);
+      setTransactions((prev) => prev.filter((t) => t.id !== id));
+      setTotal((prev) => prev - 1);
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : "No se pudo eliminar la transacción.");
     }
   }
 
@@ -101,7 +102,7 @@ export default function TransactionsPage() {
             <Wallet className="text-mh-green" /> Movimientos
           </h1>
           <p className="mt-1 text-mh-dark/60">
-            Balance actual: <span className="font-bold text-mh-dark">{currency.format(stats.balance)}</span>
+            {total} transacción{total !== 1 ? "es" : ""} registrada{total !== 1 ? "s" : ""}
           </p>
         </div>
         <GameButton variant="primary" onClick={() => setShowForm(true)}>
@@ -110,10 +111,23 @@ export default function TransactionsPage() {
       </div>
 
       <div className="flex flex-col gap-2 rounded-2xl border-2 border-mh-dark/5 bg-white p-2 sm:p-4">
+        {loading && (
+          <p className="py-8 text-center text-sm text-mh-dark/40">Cargando transacciones...</p>
+        )}
+
+        {!loading && transactions.length === 0 && (
+          <p className="py-8 text-center text-sm text-mh-dark/40">
+            No hay transacciones aún. ¡Registrá tu primera!
+          </p>
+        )}
+
         {transactions.map((transaction) => {
-          const isIncome = transaction.amount > 0;
+          const isIncome = transaction.type === "income";
           return (
-            <div key={transaction.id} className="flex items-center justify-between gap-3 rounded-xl px-3 py-3">
+            <div
+              key={transaction.id}
+              className="flex items-center justify-between gap-3 rounded-xl px-3 py-3 hover:bg-mh-dark/[0.02]"
+            >
               <div className="flex items-center gap-3">
                 <div
                   className={`flex h-10 w-10 items-center justify-center rounded-xl ${
@@ -123,16 +137,28 @@ export default function TransactionsPage() {
                   {isIncome ? <ArrowDownLeft size={18} /> : <ArrowUpRight size={18} />}
                 </div>
                 <div>
-                  <p className="font-semibold text-mh-dark">{transaction.title}</p>
+                  <p className="font-semibold text-mh-dark">
+                    {transaction.description || (isIncome ? "Ingreso" : "Gasto")}
+                  </p>
                   <p className="text-xs text-mh-dark/50">
-                    {transaction.category} · {dateFormatter.format(new Date(transaction.date))}
+                    {dateFormatter.format(new Date(transaction.date + "T12:00:00"))}
                   </p>
                 </div>
               </div>
-              <span className={`font-display text-lg font-bold ${isIncome ? "text-emerald-600" : "text-red-500"}`}>
-                {isIncome ? "+" : ""}
-                {currency.format(transaction.amount)}
-              </span>
+
+              <div className="flex items-center gap-3">
+                <span className={`font-display text-lg font-bold ${isIncome ? "text-emerald-600" : "text-red-500"}`}>
+                  {isIncome ? "+" : "-"}
+                  {currency.format(transaction.amount)}
+                </span>
+                <button
+                  onClick={() => handleDelete(transaction.id)}
+                  className="text-mh-dark/25 transition-colors hover:text-red-500"
+                  title="Eliminar"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
             </div>
           );
         })}
@@ -181,7 +207,7 @@ export default function TransactionsPage() {
                   min="0.01"
                   step="0.01"
                   value={amount}
-                  onChange={(event) => setAmount(event.target.value)}
+                  onChange={(e) => setAmount(e.target.value)}
                   className="rounded-xl border-2 border-mh-dark/10 px-4 py-2.5 text-sm outline-none focus:border-mh-green"
                   required
                 />
@@ -191,17 +217,13 @@ export default function TransactionsPage() {
                 <span className="text-xs font-bold uppercase tracking-wide text-mh-dark/50">Categoría</span>
                 <select
                   value={categoryId}
-                  onChange={(event) => setCategoryId(event.target.value)}
+                  onChange={(e) => setCategoryId(e.target.value)}
                   className="rounded-xl border-2 border-mh-dark/10 px-4 py-2.5 text-sm outline-none focus:border-mh-green"
                   required
                 >
-                  <option value="" disabled>
-                    Selecciona una categoría
-                  </option>
-                  {availableCategories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
+                  <option value="" disabled>Selecciona una categoría</option>
+                  {availableCategories.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
                 </select>
               </label>
@@ -211,7 +233,7 @@ export default function TransactionsPage() {
                 <input
                   type="date"
                   value={date}
-                  onChange={(event) => setDate(event.target.value)}
+                  onChange={(e) => setDate(e.target.value)}
                   className="rounded-xl border-2 border-mh-dark/10 px-4 py-2.5 text-sm outline-none focus:border-mh-green"
                   required
                 />
@@ -224,7 +246,7 @@ export default function TransactionsPage() {
                 <input
                   type="text"
                   value={description}
-                  onChange={(event) => setDescription(event.target.value)}
+                  onChange={(e) => setDescription(e.target.value)}
                   className="rounded-xl border-2 border-mh-dark/10 px-4 py-2.5 text-sm outline-none focus:border-mh-green"
                 />
               </label>
@@ -233,8 +255,8 @@ export default function TransactionsPage() {
                 <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-semibold text-red-600">{error}</p>
               )}
 
-              <GameButton type="submit" variant="primary" className="mt-2 w-full" disabled={loading}>
-                {loading ? "Guardando..." : "Guardar transacción"}
+              <GameButton type="submit" variant="primary" className="mt-2 w-full" disabled={submitting}>
+                {submitting ? "Guardando..." : "Guardar transacción"}
               </GameButton>
             </form>
           </div>

@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { Target, X } from "lucide-react";
+import { Target, Trash2, X } from "lucide-react";
 import ProgressBar from "@/components/ProgressBar";
 import GameButton from "@/components/GameButton";
-import { goals as demoGoals } from "@/lib/demoData";
-import { ApiError, createGoal, updateGoalProgress } from "@/lib/api";
+import { ApiError, createGoal, deleteGoal, getGoals, updateGoalProgress, type Goal } from "@/lib/api";
 import { getToken } from "@/lib/session";
 
 const currency = new Intl.NumberFormat("es-HN", {
@@ -14,17 +13,9 @@ const currency = new Intl.NumberFormat("es-HN", {
   maximumFractionDigits: 0,
 });
 
-interface DisplayGoal {
-  id: string | number;
-  realId?: string;
-  title: string;
-  current: number;
-  target: number;
-  icon: typeof Target;
-}
-
 export default function GoalsPage() {
-  const [goals, setGoals] = useState<DisplayGoal[]>(demoGoals);
+  const [goals, setGoals] = useState<Goal[]>([]);
+  const [loading, setLoading] = useState(true);
   const [token, setToken] = useState<string | null>(null);
 
   const [showForm, setShowForm] = useState(false);
@@ -32,17 +23,22 @@ export default function GoalsPage() {
   const [targetAmount, setTargetAmount] = useState("");
   const [deadline, setDeadline] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [formLoading, setFormLoading] = useState(false);
 
-  const [addingFundsId, setAddingFundsId] = useState<string | number | null>(null);
+  const [addingFundsId, setAddingFundsId] = useState<string | null>(null);
   const [fundsAmount, setFundsAmount] = useState("");
   const [fundsError, setFundsError] = useState<string | null>(null);
   const [fundsLoading, setFundsLoading] = useState(false);
 
   useEffect(() => {
-    // Token lives in localStorage, only readable client-side after mount.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setToken(getToken());
+    const storedToken = getToken();
+    setToken(storedToken);
+    if (!storedToken) return;
+
+    getGoals(storedToken)
+      .then(setGoals)
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
   async function handleCreateGoal(event: FormEvent<HTMLFormElement>) {
@@ -50,7 +46,7 @@ export default function GoalsPage() {
     if (!token) return;
 
     setError(null);
-    setLoading(true);
+    setFormLoading(true);
 
     try {
       const goal = await createGoal(token, {
@@ -59,18 +55,7 @@ export default function GoalsPage() {
         deadline,
       });
 
-      setGoals((prev) => [
-        ...prev,
-        {
-          id: goal.id,
-          realId: goal.id,
-          title: goal.name,
-          current: goal.currentAmount,
-          target: goal.targetAmount,
-          icon: Target,
-        },
-      ]);
-
+      setGoals((prev) => [goal, ...prev]);
       setName("");
       setTargetAmount("");
       setDeadline("");
@@ -78,24 +63,30 @@ export default function GoalsPage() {
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No se pudo crear la meta.");
     } finally {
-      setLoading(false);
+      setFormLoading(false);
     }
   }
 
-  async function handleAddFunds(event: FormEvent<HTMLFormElement>, goal: DisplayGoal) {
+  async function handleDeleteGoal(id: string) {
+    if (!token) return;
+    try {
+      await deleteGoal(token, id);
+      setGoals((prev) => prev.filter((g) => g.id !== id));
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : "No se pudo eliminar la meta.");
+    }
+  }
+
+  async function handleAddFunds(event: FormEvent<HTMLFormElement>, goal: Goal) {
     event.preventDefault();
-    if (!token || !goal.realId) return;
+    if (!token) return;
 
     setFundsError(null);
     setFundsLoading(true);
 
     try {
-      const updated = await updateGoalProgress(token, goal.realId, Number(fundsAmount));
-
-      setGoals((prev) =>
-        prev.map((g) => (g.id === goal.id ? { ...g, current: updated.currentAmount } : g))
-      );
-
+      const updated = await updateGoalProgress(token, goal.id, Number(fundsAmount));
+      setGoals((prev) => prev.map((g) => (g.id === goal.id ? updated : g)));
       setFundsAmount("");
       setAddingFundsId(null);
     } catch (err) {
@@ -104,6 +95,12 @@ export default function GoalsPage() {
       setFundsLoading(false);
     }
   }
+
+  const statusLabel: Record<Goal["status"], string> = {
+    active: "",
+    completed: "¡Completada!",
+    failed: "Vencida",
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -116,86 +113,115 @@ export default function GoalsPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {goals.map((goal) => {
-          const pct = Math.round((goal.current / goal.target) * 100);
-          return (
+      {loading && (
+        <p className="py-8 text-center text-sm text-mh-dark/40">Cargando metas...</p>
+      )}
+
+      {!loading && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {goals.map((goal) => (
             <div key={goal.id} className="flex flex-col rounded-2xl border-2 border-mh-dark/5 bg-white p-5">
-              <div className="mb-3 inline-flex w-fit rounded-2xl bg-mh-green/10 p-3 text-mh-green">
-                <goal.icon size={24} />
+              <div className="mb-3 flex items-center justify-between">
+                <div className="inline-flex rounded-2xl bg-mh-green/10 p-3 text-mh-green">
+                  <Target size={24} />
+                </div>
+                <div className="flex items-center gap-2">
+                  {goal.status !== "active" && (
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-bold ${
+                        goal.status === "completed"
+                          ? "bg-emerald-100 text-emerald-700"
+                          : "bg-red-100 text-red-600"
+                      }`}
+                    >
+                      {statusLabel[goal.status]}
+                    </span>
+                  )}
+                  <button
+                    onClick={() => handleDeleteGoal(goal.id)}
+                    className="text-mh-dark/25 transition-colors hover:text-red-500"
+                    title="Eliminar meta"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
               </div>
-              <h3 className="font-display text-lg font-bold text-mh-dark">{goal.title}</h3>
+
+              <h3 className="font-display text-lg font-bold text-mh-dark">{goal.name}</h3>
               <p className="mt-1 text-sm text-mh-dark/60">
-                {currency.format(goal.current)} de {currency.format(goal.target)}
+                {currency.format(goal.currentAmount)} de {currency.format(goal.targetAmount)}
               </p>
+              <p className="text-xs text-mh-dark/40">Fecha límite: {goal.deadline}</p>
 
               <div className="mt-4">
                 <div className="mb-1 flex items-center justify-between text-xs font-bold text-mh-dark/50">
                   <span>Progreso</span>
-                  <span>{pct}%</span>
+                  <span>{goal.percentageCompleted}%</span>
                 </div>
-                <ProgressBar value={goal.current} max={goal.target} colorClass="bg-mh-green" heightClass="h-3.5" />
+                <ProgressBar
+                  value={goal.currentAmount}
+                  max={goal.targetAmount}
+                  colorClass={goal.status === "completed" ? "bg-emerald-500" : "bg-mh-green"}
+                  heightClass="h-3.5"
+                />
               </div>
 
-              {addingFundsId === goal.id ? (
-                <form onSubmit={(event) => handleAddFunds(event, goal)} className="mt-4 flex flex-col gap-2">
-                  <input
-                    type="number"
-                    min="0.01"
-                    step="0.01"
-                    value={fundsAmount}
-                    onChange={(event) => setFundsAmount(event.target.value)}
-                    placeholder="Monto en L"
-                    className="rounded-xl border-2 border-mh-dark/10 px-3 py-2 text-sm outline-none focus:border-mh-green"
-                    required
-                    autoFocus
-                  />
-                  {fundsError && <p className="text-xs font-semibold text-red-600">{fundsError}</p>}
-                  <div className="flex gap-2">
-                    <GameButton type="submit" variant="primary" className="flex-1" disabled={fundsLoading}>
-                      {fundsLoading ? "..." : "Confirmar"}
-                    </GameButton>
+              {goal.status === "active" && (
+                addingFundsId === goal.id ? (
+                  <form onSubmit={(e) => handleAddFunds(e, goal)} className="mt-4 flex flex-col gap-2">
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={fundsAmount}
+                      onChange={(e) => setFundsAmount(e.target.value)}
+                      placeholder="Monto en L"
+                      className="rounded-xl border-2 border-mh-dark/10 px-3 py-2 text-sm outline-none focus:border-mh-green"
+                      required
+                      autoFocus
+                    />
+                    {fundsError && (
+                      <p className="text-xs font-semibold text-red-600">{fundsError}</p>
+                    )}
+                    <div className="flex gap-2">
+                      <GameButton type="submit" variant="primary" className="flex-1" disabled={fundsLoading}>
+                        {fundsLoading ? "..." : "Confirmar"}
+                      </GameButton>
+                      <GameButton
+                        type="button"
+                        variant="outline"
+                        onClick={() => { setAddingFundsId(null); setFundsError(null); }}
+                      >
+                        Cancelar
+                      </GameButton>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="mt-4">
                     <GameButton
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        setAddingFundsId(null);
-                        setFundsError(null);
-                      }}
+                      variant="primary"
+                      className="w-full"
+                      onClick={() => setAddingFundsId(goal.id)}
                     >
-                      Cancelar
+                      Agregar ahorro
                     </GameButton>
                   </div>
-                </form>
-              ) : (
-                <div className="mt-4">
-                  <GameButton
-                    variant="primary"
-                    className="w-full"
-                    disabled={!goal.realId}
-                    onClick={() => goal.realId && setAddingFundsId(goal.id)}
-                  >
-                    Agregar ahorro
-                  </GameButton>
-                  {!goal.realId && (
-                    <p className="mt-1 text-center text-xs text-mh-dark/40">Meta de ejemplo</p>
-                  )}
-                </div>
+                )
               )}
             </div>
-          );
-        })}
+          ))}
 
-        <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-mh-dark/15 bg-transparent p-5 text-center">
-          <p className="font-display text-lg font-bold text-mh-dark">¿Una nueva aventura?</p>
-          <p className="mt-1 text-sm text-mh-dark/60">Crea una nueva meta de ahorro.</p>
-          <div className="mt-4">
-            <GameButton variant="outline" onClick={() => setShowForm(true)}>
-              + Nueva meta
-            </GameButton>
+          <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-mh-dark/15 bg-transparent p-5 text-center">
+            <p className="font-display text-lg font-bold text-mh-dark">¿Una nueva aventura?</p>
+            <p className="mt-1 text-sm text-mh-dark/60">Crea una nueva meta de ahorro.</p>
+            <div className="mt-4">
+              <GameButton variant="outline" onClick={() => setShowForm(true)}>
+                + Nueva meta
+              </GameButton>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-mh-dark/40 px-4">
@@ -213,7 +239,7 @@ export default function GoalsPage() {
                 <input
                   type="text"
                   value={name}
-                  onChange={(event) => setName(event.target.value)}
+                  onChange={(e) => setName(e.target.value)}
                   className="rounded-xl border-2 border-mh-dark/10 px-4 py-2.5 text-sm outline-none focus:border-mh-green"
                   required
                   minLength={2}
@@ -227,7 +253,7 @@ export default function GoalsPage() {
                   min="1"
                   step="0.01"
                   value={targetAmount}
-                  onChange={(event) => setTargetAmount(event.target.value)}
+                  onChange={(e) => setTargetAmount(e.target.value)}
                   className="rounded-xl border-2 border-mh-dark/10 px-4 py-2.5 text-sm outline-none focus:border-mh-green"
                   required
                 />
@@ -238,7 +264,7 @@ export default function GoalsPage() {
                 <input
                   type="date"
                   value={deadline}
-                  onChange={(event) => setDeadline(event.target.value)}
+                  onChange={(e) => setDeadline(e.target.value)}
                   className="rounded-xl border-2 border-mh-dark/10 px-4 py-2.5 text-sm outline-none focus:border-mh-green"
                   required
                 />
@@ -248,8 +274,8 @@ export default function GoalsPage() {
                 <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-semibold text-red-600">{error}</p>
               )}
 
-              <GameButton type="submit" variant="primary" className="mt-2 w-full" disabled={loading}>
-                {loading ? "Creando..." : "Crear meta"}
+              <GameButton type="submit" variant="primary" className="mt-2 w-full" disabled={formLoading}>
+                {formLoading ? "Creando..." : "Crear meta"}
               </GameButton>
             </form>
           </div>

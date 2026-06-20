@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Bot,
@@ -13,15 +16,9 @@ import {
   Wallet,
 } from "lucide-react";
 import ProgressBar from "@/components/ProgressBar";
-import {
-  achievements,
-  bosses,
-  goals,
-  missions,
-  player,
-  ranking,
-  stats,
-} from "@/lib/demoData";
+import { achievements, bosses, missions, player, ranking, stats } from "@/lib/demoData";
+import { getGoals, type Goal } from "@/lib/api";
+import { getToken } from "@/lib/session";
 
 const currency = new Intl.NumberFormat("es-HN", {
   style: "currency",
@@ -32,8 +29,17 @@ const currency = new Intl.NumberFormat("es-HN", {
 const rankMedalClass = ["bg-mh-gold text-mh-black", "bg-gray-300 text-mh-dark", "bg-amber-600 text-white"];
 
 export default function DashboardPage() {
+  const [goals, setGoals] = useState<Goal[]>([]);
   const mainBoss = bosses[0];
   const unlockedCount = achievements.filter((a) => a.unlocked).length;
+
+  useEffect(() => {
+    const token = getToken();
+    if (!token) return;
+    getGoals(token, "active")
+      .then(setGoals)
+      .catch(() => {});
+  }, []);
 
   return (
     <div className="flex flex-col gap-6">
@@ -116,14 +122,10 @@ export default function DashboardPage() {
               </div>
               <h2 className="font-display text-lg font-bold text-mh-dark">Misiones activas</h2>
             </div>
-            <Link
-              href="/dashboard/missions"
-              className="flex items-center gap-1 text-sm font-bold text-mh-green hover:underline"
-            >
+            <Link href="/dashboard/missions" className="flex items-center gap-1 text-sm font-bold text-mh-green hover:underline">
               Ver todas <ChevronRight size={16} />
             </Link>
           </div>
-
           <div className="flex flex-col gap-4">
             {missions.slice(0, 3).map((mission) => (
               <div key={mission.id}>
@@ -148,14 +150,10 @@ export default function DashboardPage() {
               </div>
               <h2 className="font-display text-lg font-bold text-mh-dark">Jefe financiero activo</h2>
             </div>
-            <Link
-              href="/dashboard/bosses"
-              className="flex items-center gap-1 text-sm font-bold text-mh-green hover:underline"
-            >
+            <Link href="/dashboard/bosses" className="flex items-center gap-1 text-sm font-bold text-mh-green hover:underline">
               Ver todos <ChevronRight size={16} />
             </Link>
           </div>
-
           <div className="flex items-center gap-4">
             <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-mh-dark text-red-400">
               <Swords size={26} />
@@ -164,9 +162,7 @@ export default function DashboardPage() {
               <p className="font-semibold text-mh-dark">{mainBoss.name}</p>
               <div className="mb-1 mt-1 flex items-center justify-between text-xs font-bold text-mh-dark/50">
                 <span>HP</span>
-                <span>
-                  {mainBoss.hp.toLocaleString("es-HN")} / {mainBoss.maxHp.toLocaleString("es-HN")}
-                </span>
+                <span>{mainBoss.hp.toLocaleString("es-HN")} / {mainBoss.maxHp.toLocaleString("es-HN")}</span>
               </div>
               <ProgressBar value={mainBoss.hp} max={mainBoss.maxHp} colorClass="bg-red-500" heightClass="h-3.5" />
             </div>
@@ -174,7 +170,7 @@ export default function DashboardPage() {
           <p className="mt-4 text-sm text-mh-dark/60">{mainBoss.description}</p>
         </div>
 
-        {/* Metas de ahorro */}
+        {/* Metas de ahorro — datos reales */}
         <div className="rounded-2xl border-2 border-mh-dark/5 bg-white p-5">
           <div className="mb-4 flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -183,29 +179,33 @@ export default function DashboardPage() {
               </div>
               <h2 className="font-display text-lg font-bold text-mh-dark">Metas de ahorro</h2>
             </div>
-            <Link
-              href="/dashboard/goals"
-              className="flex items-center gap-1 text-sm font-bold text-mh-green hover:underline"
-            >
+            <Link href="/dashboard/goals" className="flex items-center gap-1 text-sm font-bold text-mh-green hover:underline">
               Ver todas <ChevronRight size={16} />
             </Link>
           </div>
 
-          <div className="flex flex-col gap-4">
-            {goals.slice(0, 2).map((goal) => (
-              <div key={goal.id}>
-                <div className="mb-1 flex items-center justify-between gap-2 text-sm">
-                  <span className="flex items-center gap-2 font-semibold text-mh-dark">
-                    <goal.icon size={16} className="text-mh-green" /> {goal.title}
-                  </span>
-                  <span className="shrink-0 text-xs font-bold text-mh-dark/50">
-                    {currency.format(goal.current)} / {currency.format(goal.target)}
-                  </span>
+          {goals.length === 0 ? (
+            <p className="py-4 text-center text-sm text-mh-dark/40">
+              No hay metas activas.{" "}
+              <Link href="/dashboard/goals" className="font-semibold text-mh-green hover:underline">
+                Crear una
+              </Link>
+            </p>
+          ) : (
+            <div className="flex flex-col gap-4">
+              {goals.slice(0, 2).map((goal) => (
+                <div key={goal.id}>
+                  <div className="mb-1 flex items-center justify-between gap-2 text-sm">
+                    <span className="font-semibold text-mh-dark">{goal.name}</span>
+                    <span className="shrink-0 text-xs font-bold text-mh-dark/50">
+                      {currency.format(goal.currentAmount)} / {currency.format(goal.targetAmount)}
+                    </span>
+                  </div>
+                  <ProgressBar value={goal.currentAmount} max={goal.targetAmount} colorClass="bg-mh-green" />
                 </div>
-                <ProgressBar value={goal.current} max={goal.target} colorClass="bg-mh-green" />
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Logros + Ranking */}
@@ -217,10 +217,7 @@ export default function DashboardPage() {
               </div>
               <h2 className="font-display text-lg font-bold text-mh-dark">Logros</h2>
             </div>
-            <Link
-              href="/dashboard/achievements"
-              className="flex items-center gap-1 text-sm font-bold text-mh-green hover:underline"
-            >
+            <Link href="/dashboard/achievements" className="flex items-center gap-1 text-sm font-bold text-mh-green hover:underline">
               Ver todos <ChevronRight size={16} />
             </Link>
           </div>
@@ -255,10 +252,7 @@ export default function DashboardPage() {
               </div>
               <h2 className="font-display text-lg font-bold text-mh-dark">Ranking</h2>
             </div>
-            <Link
-              href="/dashboard/ranking"
-              className="flex items-center gap-1 text-sm font-bold text-mh-green hover:underline"
-            >
+            <Link href="/dashboard/ranking" className="flex items-center gap-1 text-sm font-bold text-mh-green hover:underline">
               Ver todo <ChevronRight size={16} />
             </Link>
           </div>
@@ -272,9 +266,7 @@ export default function DashboardPage() {
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <span
-                    className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${rankMedalClass[index]}`}
-                  >
+                  <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${rankMedalClass[index]}`}>
                     {index + 1}
                   </span>
                   <span className="text-sm font-semibold text-mh-dark">{entry.name}</span>
