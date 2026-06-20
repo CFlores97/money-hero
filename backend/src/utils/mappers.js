@@ -11,6 +11,17 @@ export function mapTransaction(row) {
     };
 }
 
+export function mapUser(row) { 
+    if(!row) return null;
+    return {
+        id: row.id,
+        name: row.name,
+        email: row.email,
+        avatar: row.avatar,
+        createdAt: row.created_at
+    };
+}
+
 
 
 export function mapGoal(row) {
