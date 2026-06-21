@@ -90,7 +90,7 @@ export default function RegisterPage() {
             Regístrate y comienza tu aventura financiera.
           </p>
 
-          <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-4">
+          <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-4" noValidate>
             <label className="flex flex-col gap-1.5">
               <span className="text-xs font-bold uppercase tracking-wide text-mh-dark/50">
                 Nombre de héroe

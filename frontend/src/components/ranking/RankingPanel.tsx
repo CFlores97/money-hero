@@ -22,7 +22,7 @@ export default function RankingPanel({
     return (
       <EmptyState
         title="Aún no tienes amistades en ranking"
-        description="Cuando existan amistades aceptadas en el backend, el ranking social aparecerá aquí."
+        description="Cuando sumes amistades, aqui veras como va cada heroe."
       />
     );
   }

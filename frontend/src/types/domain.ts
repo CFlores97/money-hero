@@ -11,7 +11,7 @@ export interface AuthResponse {
   user: AuthUser;
 }
 
-export interface UserProfile extends AuthUser {}
+export type UserProfile = AuthUser;
 
 export interface Category {
   id: string;

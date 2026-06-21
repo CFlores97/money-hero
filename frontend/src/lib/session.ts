@@ -2,41 +2,84 @@ import type { AuthUser } from "@/types/domain";
 
 const TOKEN_KEY = "moneyhero_token";
 const USER_KEY = "moneyhero_user";
+const LEGACY_TOKEN_KEYS = ["token", "authToken"];
+const LEGACY_USER_KEYS = ["user", "authUser"];
 
 function canUseStorage() {
   return typeof window !== "undefined";
 }
 
-export function getToken(): string | null {
+function getStorage() {
   if (!canUseStorage()) {
     return null;
   }
 
-  return window.localStorage.getItem(TOKEN_KEY);
+  return window.localStorage;
+}
+
+function migrateLegacyValue(primaryKey: string, legacyKeys: string[]) {
+  const storage = getStorage();
+  if (!storage) {
+    return null;
+  }
+
+  const currentValue = storage.getItem(primaryKey);
+  if (currentValue) {
+    return currentValue;
+  }
+
+  for (const legacyKey of legacyKeys) {
+    const legacyValue = storage.getItem(legacyKey);
+    if (legacyValue) {
+      storage.setItem(primaryKey, legacyValue);
+      storage.removeItem(legacyKey);
+      return legacyValue;
+    }
+  }
+
+  return null;
+}
+
+export function getToken(): string | null {
+  const storage = getStorage();
+  if (!storage) {
+    return null;
+  }
+
+  return storage.getItem(TOKEN_KEY) ?? migrateLegacyValue(TOKEN_KEY, LEGACY_TOKEN_KEYS);
 }
 
 export function setToken(token: string) {
-  if (!canUseStorage()) {
+  const storage = getStorage();
+  if (!storage) {
     return;
   }
 
-  window.localStorage.setItem(TOKEN_KEY, token);
+  storage.setItem(TOKEN_KEY, token);
+  for (const legacyKey of LEGACY_TOKEN_KEYS) {
+    storage.removeItem(legacyKey);
+  }
 }
 
 export function removeToken() {
-  if (!canUseStorage()) {
+  const storage = getStorage();
+  if (!storage) {
     return;
   }
 
-  window.localStorage.removeItem(TOKEN_KEY);
+  storage.removeItem(TOKEN_KEY);
+  for (const legacyKey of LEGACY_TOKEN_KEYS) {
+    storage.removeItem(legacyKey);
+  }
 }
 
 export function getCurrentUser(): AuthUser | null {
-  if (!canUseStorage()) {
+  const storage = getStorage();
+  if (!storage) {
     return null;
   }
 
-  const rawUser = window.localStorage.getItem(USER_KEY);
+  const rawUser = storage.getItem(USER_KEY) ?? migrateLegacyValue(USER_KEY, LEGACY_USER_KEYS);
   if (!rawUser) {
     return null;
   }
@@ -44,25 +87,33 @@ export function getCurrentUser(): AuthUser | null {
   try {
     return JSON.parse(rawUser) as AuthUser;
   } catch {
-    window.localStorage.removeItem(USER_KEY);
+    storage.removeItem(USER_KEY);
     return null;
   }
 }
 
 export function setCurrentUser(user: AuthUser) {
-  if (!canUseStorage()) {
+  const storage = getStorage();
+  if (!storage) {
     return;
   }
 
-  window.localStorage.setItem(USER_KEY, JSON.stringify(user));
+  storage.setItem(USER_KEY, JSON.stringify(user));
+  for (const legacyKey of LEGACY_USER_KEYS) {
+    storage.removeItem(legacyKey);
+  }
 }
 
 export function clearSession() {
+  const storage = getStorage();
   removeToken();
 
-  if (!canUseStorage()) {
+  if (!storage) {
     return;
   }
 
-  window.localStorage.removeItem(USER_KEY);
+  storage.removeItem(USER_KEY);
+  for (const legacyKey of LEGACY_USER_KEYS) {
+    storage.removeItem(legacyKey);
+  }
 }

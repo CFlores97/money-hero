@@ -20,7 +20,7 @@ export default function NotificationsPanel({
     return (
       <EmptyState
         title="Sin notificaciones"
-        description="Tu centro de alertas se llenará cuando el backend genere avisos de progreso."
+        description="Tus alertas apareceran aqui cuando haya novedades para ti."
       />
     );
   }

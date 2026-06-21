@@ -77,7 +77,7 @@ export default function RankingPage() {
           >
             Global
           </button>
-          <button
+          {/*<button
             type="button"
             onClick={() => setScope("friends")}
             className={`rounded-full px-4 py-2 text-sm font-bold ${
@@ -85,7 +85,7 @@ export default function RankingPage() {
             }`}
           >
             Amigos
-          </button>
+          </button>*/}
         </div>
 
         {error ? <ErrorAlert message={error} /> : null}

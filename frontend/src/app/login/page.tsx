@@ -86,7 +86,7 @@ export default function LoginPage() {
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="mt-8 space-y-4">
+          <form onSubmit={handleSubmit} className="mt-8 space-y-4" noValidate>
             <label className="block">
               <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-mh-dark/45">
                 Correo electrónico

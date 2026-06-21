@@ -155,7 +155,7 @@ export default function TransactionsPage() {
       <div className="space-y-6">
         <PageHeader
           title="Transacciones"
-          description="Registra ingresos y gastos reales desde la API REST de MoneyHero."
+          description="Registra tus ingresos y gastos para mantener tu progreso al dia."
           action={
             <GameButton type="button" variant="primary" onClick={() => setShowForm(true)}>
               <Plus size={18} />

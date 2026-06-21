@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { BadgeInfo, Save } from "lucide-react";
 import ProtectedPage from "@/components/ProtectedPage";
 import GameButton from "@/components/GameButton";
@@ -20,6 +20,7 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [name, setName] = useState("");
   const [avatar, setAvatar] = useState("");
+  const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -49,18 +50,17 @@ export default function ProfilePage() {
     };
   }, []);
 
-  const initials = useMemo(() => {
-    if (!profile?.name) {
-      return "MH";
-    }
-
-    return profile.name
-      .split(" ")
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((part) => part[0]?.toUpperCase() ?? "")
-      .join("");
-  }, [profile?.name]);
+  const displayName = name.trim() || profile?.name || "";
+  const avatarUrl = profile?.avatar?.trim() ?? "";
+  const hasAvatarImage = Boolean(avatarUrl) && failedAvatarUrl !== avatarUrl;
+  const initials = displayName
+    ? displayName
+        .split(" ")
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part[0]?.toUpperCase() ?? "")
+        .join("")
+    : "MH";
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -80,6 +80,9 @@ export default function ProfilePage() {
       });
 
       setProfile(updatedProfile);
+      setName(updatedProfile.name);
+      setAvatar(updatedProfile.avatar ?? "");
+      setFailedAvatarUrl(null);
       setCurrentUser(updatedProfile);
       emitDataSync();
     } catch (submissionError) {
@@ -106,15 +109,25 @@ export default function ProfilePage() {
       <div className="space-y-6">
         <PageHeader
           title="Perfil"
-          description="Consulta tu usuario actual y actualiza los campos que realmente soporta el backend."
+          description="Administra tu información personal."
         />
 
         {error ? <ErrorAlert message={error} /> : null}
 
         <section className="grid grid-cols-1 gap-6 xl:grid-cols-[0.75fr_1.25fr]">
           <article className="rounded-[2rem] border-2 border-mh-dark/5 bg-white p-6 shadow-sm">
-            <div className="mx-auto flex h-28 w-28 items-center justify-center rounded-full bg-[linear-gradient(135deg,#1f8a4c,#ffc933)] text-4xl font-black text-white">
-              {initials}
+            <div className="mx-auto flex h-28 w-28 items-center justify-center overflow-hidden rounded-full bg-[linear-gradient(135deg,#1f8a4c,#ffc933)] text-4xl font-black text-white">
+              {hasAvatarImage ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={avatarUrl}
+                  alt={`Avatar de ${displayName || "MoneyHero"}`}
+                  className="h-full w-full object-cover"
+                  onError={() => setFailedAvatarUrl(avatarUrl)}
+                />
+              ) : (
+                initials
+              )}
             </div>
             <h2 className="mt-5 text-center font-display text-3xl font-extrabold text-mh-dark">
               {profile?.name}
@@ -131,7 +144,9 @@ export default function ProfilePage() {
             <div className="mt-4 rounded-3xl bg-mh-cream px-5 py-4">
               <p className="text-xs font-bold uppercase tracking-wide text-mh-dark/45">Avatar</p>
               <p className="mt-2 text-sm text-mh-dark/60">
-                {profile?.avatar ? "Configurado mediante URL" : "No configurado"}
+                {hasAvatarImage
+                  ? "Tu imagen de perfil esta lista."
+                  : "Mostrando tus iniciales por ahora."}
               </p>
             </div>
           </article>
@@ -143,7 +158,7 @@ export default function ProfilePage() {
               </div>
               <div>
                 <h2 className="font-display text-3xl font-extrabold text-mh-dark">Editar perfil</h2>
-                <p className="text-sm text-mh-dark/55">Campos soportados: nombre y avatar.</p>
+                <p className="text-sm text-mh-dark/55">Personaliza como te veran los demas heroes.</p>
               </div>
             </div>
 
@@ -159,7 +174,7 @@ export default function ProfilePage() {
               </label>
               <label className="block">
                 <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-mh-dark/45">
-                  URL de avatar
+                  Imagen de perfil
                 </span>
                 <input
                   type="url"
@@ -168,6 +183,9 @@ export default function ProfilePage() {
                   placeholder="https://..."
                   className="w-full rounded-2xl border-2 border-mh-dark/10 px-4 py-3 text-sm outline-none focus:border-mh-green"
                 />
+                <p className="mt-2 text-sm text-mh-dark/55">
+                  Usa un enlace directo a una imagen (.jpg, .png o .webp).
+                </p>
               </label>
 
               <GameButton type="submit" variant="primary" className="w-full" disabled={isSaving}>

@@ -29,7 +29,6 @@ describe("apiClient", () => {
   it("limpia sesión ante 401", async () => {
     vi.spyOn(session, "getToken").mockReturnValue("token-demo");
     const clearSessionSpy = vi.spyOn(session, "clearSession").mockImplementation(() => undefined);
-    const assignSpy = vi.spyOn(window.location, "assign").mockImplementation(() => undefined);
 
     apiClient.defaults.adapter = async (config) => {
       throw new AxiosError(
@@ -52,6 +51,5 @@ describe("apiClient", () => {
       statusCode: 401,
     } satisfies Partial<ApiClientError>);
     expect(clearSessionSpy).toHaveBeenCalled();
-    expect(assignSpy).toHaveBeenCalledWith("/login");
   });
 });

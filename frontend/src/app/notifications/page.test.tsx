@@ -35,7 +35,15 @@ describe("NotificationsPage", () => {
   });
 
   it("marcar una leída", async () => {
-    vi.spyOn(notificationsService, "getNotifications").mockResolvedValue(notifications);
+    vi.spyOn(notificationsService, "getNotifications")
+      .mockResolvedValueOnce(notifications)
+      .mockResolvedValueOnce([
+        {
+          ...notifications[0],
+          readStatus: true,
+        },
+        notifications[1],
+      ]);
     vi.spyOn(notificationsService, "markNotificationRead").mockResolvedValue({
       ...notifications[0],
       readStatus: true,
@@ -53,7 +61,14 @@ describe("NotificationsPage", () => {
   });
 
   it("marcar todas leídas", async () => {
-    vi.spyOn(notificationsService, "getNotifications").mockResolvedValue(notifications);
+    vi.spyOn(notificationsService, "getNotifications")
+      .mockResolvedValueOnce(notifications)
+      .mockResolvedValueOnce(
+        notifications.map((notification) => ({
+          ...notification,
+          readStatus: true,
+        }))
+      );
     vi.spyOn(notificationsService, "markAllNotificationsRead").mockResolvedValue({
       message: "ok",
     });

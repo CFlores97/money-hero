@@ -68,7 +68,7 @@ export default function TransactionForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
       <div className="grid grid-cols-2 gap-2">
         <button
           type="button"

@@ -88,7 +88,7 @@ export default function MissionsPage() {
       <div className="space-y-6">
         <PageHeader
           title="Misiones"
-          description="Retos activos y completados usando los datos reales disponibles en el backend."
+          description="Revisa tus retos activos y celebra los que ya completaste."
         />
 
         <div className="flex flex-wrap gap-3">

@@ -3,7 +3,6 @@ import userEvent from "@testing-library/user-event";
 import { vi } from "vitest";
 import LoginPage from "@/app/login/page";
 import { ApiClientError } from "@/lib/api";
-import * as session from "@/lib/session";
 import * as authService from "@/services/auth.service";
 
 const pushMock = vi.fn();
@@ -16,6 +15,7 @@ vi.mock("next/navigation", () => ({
 
 describe("LoginPage", () => {
   afterEach(() => {
+    window.localStorage.clear();
     vi.clearAllMocks();
   });
 
@@ -43,8 +43,6 @@ describe("LoginPage", () => {
         createdAt: "2026-06-21T00:00:00.000Z",
       },
     });
-    const setTokenSpy = vi.spyOn(session, "setToken").mockImplementation(() => undefined);
-    const setCurrentUserSpy = vi.spyOn(session, "setCurrentUser").mockImplementation(() => undefined);
 
     render(<LoginPage />);
 
@@ -53,8 +51,7 @@ describe("LoginPage", () => {
     await user.click(screen.getByRole("button", { name: /iniciar sesión/i }));
 
     await waitFor(() => {
-      expect(setTokenSpy).toHaveBeenCalledWith("jwt-demo");
-      expect(setCurrentUserSpy).toHaveBeenCalled();
+      expect(window.localStorage.getItem("moneyhero_token")).toBe("jwt-demo");
       expect(pushMock).toHaveBeenCalledWith("/dashboard");
     });
   });

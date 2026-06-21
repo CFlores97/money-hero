@@ -62,7 +62,7 @@ export default function AchievementsPage() {
       <div className="space-y-6">
         <PageHeader
           title="Logros"
-          description="Diferencia visual entre logros bloqueados y desbloqueados usando el backend real."
+          description="Sigue tus logros y descubre lo que ya desbloqueaste."
         />
 
         <div className="flex flex-wrap gap-3">

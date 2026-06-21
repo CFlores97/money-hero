@@ -32,7 +32,7 @@ export default function MissionsPanel({
     return (
       <EmptyState
         title="No hay misiones vigentes"
-        description="Cuando el backend genere nuevas misiones activas aparecerán aquí."
+        description="Las nuevas misiones activas apareceran aqui muy pronto."
       />
     );
   }
@@ -88,7 +88,7 @@ export default function MissionsPanel({
               </GameButton>
               {claimUnavailable ? (
                 <p className="mt-2 text-xs font-semibold text-amber-700">
-                  El backend actual no expone todavía la ruta HTTP para reclamar esta misión.
+                  Esta recompensa todavia no esta disponible para reclamar.
                 </p>
               ) : null}
             </div>

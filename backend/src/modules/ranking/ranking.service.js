@@ -17,7 +17,7 @@ export async function getGlobalRanking(userId, limit) {
             league
         `)
         .order('total_xp', { ascending: false })
-        .order('name');
+        .order('name', {foreignTable: 'user'});
 
     if (error) throw new AppError(400, error.message);
 
@@ -74,7 +74,7 @@ export async function getFriendsRanking(userId) {
             `)
         .in('user_id', userAndFriendIds)
         .order('total_xp', { ascending: false })
-        .order('name');
+        .order('name', {foreignTable: 'user'});
 
     if (friendsError) throw new AppError(400, friendsError.message);
 
