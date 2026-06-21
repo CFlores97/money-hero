@@ -3,280 +3,422 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
-  Bot,
+  Bell,
   ChevronRight,
-  Coins,
   Flag,
   Medal,
-  Swords,
+  PiggyBank,
   Target,
-  TrendingDown,
-  TrendingUp,
   Trophy,
-  Wallet,
+  Zap,
 } from "lucide-react";
+import ProtectedPage from "@/components/ProtectedPage";
 import ProgressBar from "@/components/ProgressBar";
-import { achievements, bosses, missions, player, ranking, stats } from "@/lib/demoData";
-import { getGoals, type Goal } from "@/lib/api";
-import { getToken } from "@/lib/session";
-
-const currency = new Intl.NumberFormat("es-HN", {
-  style: "currency",
-  currency: "HNL",
-  maximumFractionDigits: 0,
-});
-
-const rankMedalClass = ["bg-mh-gold text-mh-black", "bg-gray-300 text-mh-dark", "bg-amber-600 text-white"];
+import EmptyState from "@/components/common/EmptyState";
+import ErrorAlert from "@/components/common/ErrorAlert";
+import LoadingState from "@/components/common/LoadingState";
+import PageHeader from "@/components/common/PageHeader";
+import StatCard from "@/components/common/StatCard";
+import { subscribeToDataSync } from "@/lib/data-events";
+import { compactCurrencyFormatter, formatDateTime } from "@/lib/formatters";
+import { ApiClientError } from "@/lib/api";
+import * as achievementsService from "@/services/achievements.service";
+import * as budgetsService from "@/services/budgets.service";
+import * as gamificationService from "@/services/gamification.service";
+import * as goalsService from "@/services/goals.service";
+import * as missionsService from "@/services/missions.service";
+import * as notificationsService from "@/services/notifications.service";
+import * as rankingService from "@/services/ranking.service";
+import type {
+  Achievement,
+  Budget,
+  GamificationProgress,
+  Goal,
+  Mission,
+  Notification,
+  RankingResponse,
+} from "@/types/domain";
 
 export default function DashboardPage() {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [gamification, setGamification] = useState<GamificationProgress | null>(null);
+  const [budget, setBudget] = useState<Budget | null>(null);
   const [goals, setGoals] = useState<Goal[]>([]);
-  const mainBoss = bosses[0];
-  const unlockedCount = achievements.filter((a) => a.unlocked).length;
+  const [missions, setMissions] = useState<Mission[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [ranking, setRanking] = useState<RankingResponse | null>(null);
+  const [achievements, setAchievements] = useState<Achievement[]>([]);
 
   useEffect(() => {
-    const token = getToken();
-    if (!token) return;
-    getGoals(token, "active")
-      .then(setGoals)
-      .catch(() => {});
+    let isMounted = true;
+
+    async function loadDashboard() {
+      setError(null);
+
+      const results = await Promise.allSettled([
+        gamificationService.getProgress(),
+        budgetsService.getCurrentBudget(),
+        goalsService.getGoals("active"),
+        missionsService.getMissions({ status: "active" }),
+        notificationsService.getNotifications(false),
+        rankingService.getGlobalRanking(5),
+        achievementsService.getAchievements(true),
+      ]);
+
+      if (!isMounted) {
+        return;
+      }
+
+      const budgetResult = results[1];
+      if (budgetResult.status === "rejected") {
+        const budgetError = budgetResult.reason;
+        if (!(budgetError instanceof ApiClientError) || budgetError.statusCode !== 404) {
+          setError(budgetError instanceof Error ? budgetError.message : "No se pudo cargar el dashboard.");
+        }
+      }
+
+      if (results[0].status === "fulfilled") {
+        setGamification(results[0].value);
+      }
+
+      if (budgetResult.status === "fulfilled") {
+        setBudget(budgetResult.value);
+      } else if (budgetResult.reason instanceof ApiClientError && budgetResult.reason.statusCode === 404) {
+        setBudget(null);
+      }
+
+      if (results[2].status === "fulfilled") {
+        setGoals(results[2].value);
+      }
+
+      if (results[3].status === "fulfilled") {
+        setMissions(results[3].value);
+      }
+
+      if (results[4].status === "fulfilled") {
+        setNotifications(results[4].value);
+      }
+
+      if (results[5].status === "fulfilled") {
+        setRanking(results[5].value);
+      }
+
+      if (results[6].status === "fulfilled") {
+        setAchievements(results[6].value);
+      }
+
+      setLoading(false);
+    }
+
+    void loadDashboard();
+
+    const unsubscribe = subscribeToDataSync(() => {
+      void loadDashboard();
+    });
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, []);
 
+  if (loading) {
+    return (
+      <ProtectedPage>
+        <LoadingState label="Cargando tu dashboard..." />
+      </ProtectedPage>
+    );
+  }
+
+  const activeGoals = goals.slice(0, 3);
+  const pendingMissions = missions.slice(0, 3);
+  const unreadNotifications = notifications.slice(0, 4);
+  const unlockedAchievements = achievements.length;
+
   return (
-    <div className="flex flex-col gap-6">
-      {/* Hero / profile banner */}
-      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-mh-dark to-mh-green p-6 text-white shadow-lg sm:p-8">
-        <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/5" />
-        <div className="absolute right-20 bottom-0 h-24 w-24 rounded-full bg-white/5" />
+    <ProtectedPage>
+      <div className="space-y-6">
+        <PageHeader
+          title="Dashboard"
+          description="Resumen real de tu progreso, presupuesto y actividad financiera gamificada."
+        />
 
-        <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-4">
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border-2 border-white/20 bg-white/10 sm:h-20 sm:w-20">
-              <Bot size={36} className="text-mh-lime" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-white/70">¡Bienvenido de nuevo!</p>
-              <h1 className="font-display text-2xl font-extrabold sm:text-3xl">{player.name}</h1>
-              <p className="mt-0.5 text-sm font-bold text-mh-lime">
-                Nivel {player.level} · {player.title}
-              </p>
-            </div>
-          </div>
+        {error ? <ErrorAlert message={error} /> : null}
 
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 rounded-2xl bg-white/10 px-4 py-2.5 font-bold">
-              <Coins size={20} className="text-mh-gold" /> {player.coins.toLocaleString("es-HN")}
-            </div>
-          </div>
-        </div>
-
-        <div className="relative mt-6">
-          <div className="mb-1.5 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-white/70">
-            <span>Progreso al Nivel {player.level + 1}</span>
-            <span>
-              {player.xp.toLocaleString("es-HN")} / {player.xpToNext.toLocaleString("es-HN")} XP
-            </span>
-          </div>
-          <ProgressBar
-            value={player.xp}
-            max={player.xpToNext}
-            colorClass="bg-mh-gold"
-            trackClass="bg-white/15"
-            heightClass="h-4"
+        <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <StatCard
+            label="XP total"
+            value={gamification ? `${gamification.totalXp.toLocaleString("es-HN")} XP` : "0 XP"}
+            icon={<Zap size={22} />}
+            hint={gamification ? `Faltan ${gamification.xpToNextLevel} XP para el siguiente nivel` : undefined}
           />
-        </div>
-      </section>
+          <StatCard
+            label="Liga actual"
+            value={gamification?.league ?? "Sin liga"}
+            icon={<Trophy size={22} />}
+            hint={gamification ? `Nivel ${gamification.level} · Racha ${gamification.streakDays}` : undefined}
+            accentClass="bg-mh-gold/15 text-amber-700"
+          />
+          <StatCard
+            label="Metas activas"
+            value={String(goals.length)}
+            icon={<Target size={22} />}
+            hint="Objetivos con progreso disponible"
+            accentClass="bg-mh-lime/20 text-mh-green"
+          />
+          <StatCard
+            label="No leídas"
+            value={String(notifications.length)}
+            icon={<Bell size={22} />}
+            hint="Alertas pendientes por revisar"
+            accentClass="bg-red-50 text-red-600"
+          />
+        </section>
 
-      {/* Stat cards */}
-      <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="rounded-2xl border-2 border-mh-dark/5 bg-white p-5">
-          <div className="mb-3 inline-flex rounded-xl bg-mh-green/10 p-3 text-mh-green">
-            <Wallet size={22} />
-          </div>
-          <p className="text-sm font-semibold text-mh-dark/50">Balance total</p>
-          <p className="font-display text-2xl font-extrabold text-mh-dark">{currency.format(stats.balance)}</p>
-        </div>
-        <div className="rounded-2xl border-2 border-mh-dark/5 bg-white p-5">
-          <div className="mb-3 inline-flex rounded-xl bg-emerald-500/10 p-3 text-emerald-600">
-            <TrendingUp size={22} />
-          </div>
-          <p className="text-sm font-semibold text-mh-dark/50">Ingresos del mes</p>
-          <p className="font-display text-2xl font-extrabold text-emerald-600">+{currency.format(stats.income)}</p>
-        </div>
-        <div className="rounded-2xl border-2 border-mh-dark/5 bg-white p-5">
-          <div className="mb-3 inline-flex rounded-xl bg-red-500/10 p-3 text-red-500">
-            <TrendingDown size={22} />
-          </div>
-          <p className="text-sm font-semibold text-mh-dark/50">Gastos del mes</p>
-          <p className="font-display text-2xl font-extrabold text-red-500">-{currency.format(stats.expenses)}</p>
-        </div>
-      </section>
-
-      {/* Game panels */}
-      <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {/* Misiones activas */}
-        <div className="rounded-2xl border-2 border-mh-dark/5 bg-white p-5">
-          <div className="mb-4 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="rounded-xl bg-mh-green/10 p-2 text-mh-green">
-                <Flag size={20} />
+        <section className="grid grid-cols-1 gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+          <article className="rounded-[2rem] bg-[linear-gradient(135deg,#0c2118,#1f8a4c)] p-6 text-white shadow-xl">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.22em] text-white/60">
+                  Gamificación
+                </p>
+                <h2 className="mt-3 font-display text-4xl font-extrabold">
+                  Nivel {gamification?.level ?? 0}
+                </h2>
+                <p className="mt-2 text-sm text-white/75">
+                  Último XP recibido: {gamification?.recentXpGained ?? 0}
+                </p>
               </div>
-              <h2 className="font-display text-lg font-bold text-mh-dark">Misiones activas</h2>
+              <div className="rounded-3xl bg-white/10 px-5 py-4 text-right">
+                <p className="text-xs font-bold uppercase tracking-wide text-white/60">Racha</p>
+                <p className="font-display text-3xl font-extrabold">{gamification?.streakDays ?? 0}</p>
+              </div>
             </div>
-            <Link href="/dashboard/missions" className="flex items-center gap-1 text-sm font-bold text-mh-green hover:underline">
-              Ver todas <ChevronRight size={16} />
-            </Link>
-          </div>
-          <div className="flex flex-col gap-4">
-            {missions.slice(0, 3).map((mission) => (
-              <div key={mission.id}>
-                <div className="mb-1 flex items-center justify-between gap-2 text-sm">
-                  <span className="font-semibold text-mh-dark">{mission.title}</span>
-                  <span className="shrink-0 rounded-full bg-mh-gold/15 px-2 py-0.5 text-xs font-bold text-amber-600">
-                    +{mission.xp} XP
-                  </span>
+            <div className="mt-6">
+              <div className="mb-2 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-white/70">
+                <span>Progreso al siguiente nivel</span>
+                <span>{gamification?.xpToNextLevel ?? 0} XP restantes</span>
+              </div>
+              <ProgressBar
+                value={gamification ? Math.max(250 - gamification.xpToNextLevel, 0) : 0}
+                max={250}
+                colorClass="bg-mh-gold"
+                trackClass="bg-white/15"
+                heightClass="h-4"
+              />
+            </div>
+          </article>
+
+          <article className="rounded-[2rem] border-2 border-mh-dark/5 bg-white p-6 shadow-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="rounded-2xl bg-mh-green/10 p-3 text-mh-green">
+                  <PiggyBank size={24} />
                 </div>
-                <ProgressBar value={mission.progress} max={mission.total} colorClass="bg-mh-green" />
+                <div>
+                  <h2 className="font-display text-2xl font-extrabold text-mh-dark">Presupuesto actual</h2>
+                  <p className="text-sm text-mh-dark/55">Vista conectada a `/budgets/current`</p>
+                </div>
               </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Jefes financieros */}
-        <div className="rounded-2xl border-2 border-mh-dark/5 bg-white p-5">
-          <div className="mb-4 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="rounded-xl bg-red-500/10 p-2 text-red-500">
-                <Swords size={20} />
-              </div>
-              <h2 className="font-display text-lg font-bold text-mh-dark">Jefe financiero activo</h2>
-            </div>
-            <Link href="/dashboard/bosses" className="flex items-center gap-1 text-sm font-bold text-mh-green hover:underline">
-              Ver todos <ChevronRight size={16} />
-            </Link>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-mh-dark text-red-400">
-              <Swords size={26} />
-            </div>
-            <div className="w-full">
-              <p className="font-semibold text-mh-dark">{mainBoss.name}</p>
-              <div className="mb-1 mt-1 flex items-center justify-between text-xs font-bold text-mh-dark/50">
-                <span>HP</span>
-                <span>{mainBoss.hp.toLocaleString("es-HN")} / {mainBoss.maxHp.toLocaleString("es-HN")}</span>
-              </div>
-              <ProgressBar value={mainBoss.hp} max={mainBoss.maxHp} colorClass="bg-red-500" heightClass="h-3.5" />
-            </div>
-          </div>
-          <p className="mt-4 text-sm text-mh-dark/60">{mainBoss.description}</p>
-        </div>
-
-        {/* Metas de ahorro — datos reales */}
-        <div className="rounded-2xl border-2 border-mh-dark/5 bg-white p-5">
-          <div className="mb-4 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="rounded-xl bg-mh-lime/20 p-2 text-mh-green">
-                <Target size={20} />
-              </div>
-              <h2 className="font-display text-lg font-bold text-mh-dark">Metas de ahorro</h2>
-            </div>
-            <Link href="/dashboard/goals" className="flex items-center gap-1 text-sm font-bold text-mh-green hover:underline">
-              Ver todas <ChevronRight size={16} />
-            </Link>
-          </div>
-
-          {goals.length === 0 ? (
-            <p className="py-4 text-center text-sm text-mh-dark/40">
-              No hay metas activas.{" "}
-              <Link href="/dashboard/goals" className="font-semibold text-mh-green hover:underline">
-                Crear una
+              <Link href="/budgets" className="text-sm font-bold text-mh-green hover:underline">
+                Ver más
               </Link>
-            </p>
-          ) : (
-            <div className="flex flex-col gap-4">
-              {goals.slice(0, 2).map((goal) => (
-                <div key={goal.id}>
-                  <div className="mb-1 flex items-center justify-between gap-2 text-sm">
-                    <span className="font-semibold text-mh-dark">{goal.name}</span>
-                    <span className="shrink-0 text-xs font-bold text-mh-dark/50">
-                      {currency.format(goal.currentAmount)} / {currency.format(goal.targetAmount)}
-                    </span>
+            </div>
+
+            {budget ? (
+              <div className="mt-5">
+                <div className="flex items-end justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-semibold text-mh-dark/55">Gastado</p>
+                    <p className="font-display text-3xl font-extrabold text-mh-dark">
+                      {compactCurrencyFormatter.format(budget.spentAmount)}
+                    </p>
                   </div>
-                  <ProgressBar value={goal.currentAmount} max={goal.targetAmount} colorClass="bg-mh-green" />
+                  <div className="text-right">
+                    <p className="text-sm font-semibold text-mh-dark/55">Límite</p>
+                    <p className="font-display text-2xl font-extrabold text-mh-dark">
+                      {compactCurrencyFormatter.format(budget.limitAmount)}
+                    </p>
+                  </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Logros + Ranking */}
-        <div className="rounded-2xl border-2 border-mh-dark/5 bg-white p-5">
-          <div className="mb-4 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="rounded-xl bg-mh-gold/15 p-2 text-amber-600">
-                <Trophy size={20} />
-              </div>
-              <h2 className="font-display text-lg font-bold text-mh-dark">Logros</h2>
-            </div>
-            <Link href="/dashboard/achievements" className="flex items-center gap-1 text-sm font-bold text-mh-green hover:underline">
-              Ver todos <ChevronRight size={16} />
-            </Link>
-          </div>
-
-          <p className="mb-3 text-sm text-mh-dark/60">
-            Has desbloqueado <span className="font-bold text-mh-dark">{unlockedCount}</span> de{" "}
-            {achievements.length} insignias.
-          </p>
-
-          <div className="flex flex-wrap gap-3">
-            {achievements.map((achievement) => (
-              <div
-                key={achievement.id}
-                title={achievement.title}
-                className={`flex h-12 w-12 items-center justify-center rounded-2xl border-2 ${
-                  achievement.unlocked
-                    ? "border-mh-gold/40 bg-mh-gold/10 text-amber-600"
-                    : "border-mh-dark/5 bg-mh-dark/5 text-mh-dark/30"
-                }`}
-              >
-                <achievement.icon size={20} />
-              </div>
-            ))}
-          </div>
-
-          <div className="my-4 h-px bg-mh-dark/5" />
-
-          <div className="mb-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="rounded-xl bg-mh-dark/5 p-2 text-mh-dark">
-                <Medal size={20} />
-              </div>
-              <h2 className="font-display text-lg font-bold text-mh-dark">Ranking</h2>
-            </div>
-            <Link href="/dashboard/ranking" className="flex items-center gap-1 text-sm font-bold text-mh-green hover:underline">
-              Ver todo <ChevronRight size={16} />
-            </Link>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            {ranking.slice(0, 3).map((entry, index) => (
-              <div
-                key={entry.id}
-                className={`flex items-center justify-between rounded-xl px-3 py-2 ${
-                  entry.name === player.name ? "bg-mh-green/10" : "bg-mh-dark/5"
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${rankMedalClass[index]}`}>
-                    {index + 1}
-                  </span>
-                  <span className="text-sm font-semibold text-mh-dark">{entry.name}</span>
+                <div className="mt-4">
+                  <ProgressBar
+                    value={budget.spentAmount}
+                    max={budget.limitAmount}
+                    colorClass={budget.percentageUsed >= 100 ? "bg-red-500" : "bg-mh-green"}
+                    heightClass="h-4"
+                  />
                 </div>
-                <span className="text-xs font-bold text-mh-dark/50">{entry.xp.toLocaleString("es-HN")} XP</span>
+                <p className="mt-3 text-sm font-semibold text-mh-dark/60">
+                  {budget.percentageUsed}% usado {budget.alertTriggered ? "· alerta activada" : ""}
+                </p>
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
-    </div>
+            ) : (
+              <EmptyState
+                title="Sin presupuesto para el mes actual"
+                description="Crea uno desde la pantalla de presupuestos para activar alertas reales."
+              />
+            )}
+          </article>
+        </section>
+
+        <section className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+          <article className="rounded-[2rem] border-2 border-mh-dark/5 bg-white p-6 shadow-sm">
+            <div className="mb-5 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="rounded-2xl bg-mh-lime/20 p-3 text-mh-green">
+                  <Target size={24} />
+                </div>
+                <div>
+                  <h2 className="font-display text-2xl font-extrabold text-mh-dark">Metas activas</h2>
+                  <p className="text-sm text-mh-dark/55">Progreso directo desde `/goals`</p>
+                </div>
+              </div>
+              <Link href="/goals" className="text-sm font-bold text-mh-green hover:underline">
+                Ver todas
+              </Link>
+            </div>
+
+            {activeGoals.length ? (
+              <div className="space-y-4">
+                {activeGoals.map((goal) => (
+                  <div key={goal.id} className="rounded-2xl bg-mh-cream px-4 py-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-mh-dark">{goal.name}</p>
+                        <p className="text-sm text-mh-dark/55">
+                          {compactCurrencyFormatter.format(goal.currentAmount)} de{" "}
+                          {compactCurrencyFormatter.format(goal.targetAmount)}
+                        </p>
+                      </div>
+                      <span className="text-sm font-bold text-mh-dark/60">{goal.percentageCompleted}%</span>
+                    </div>
+                    <div className="mt-3">
+                      <ProgressBar value={goal.currentAmount} max={goal.targetAmount} colorClass="bg-mh-green" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <EmptyState title="Aún no hay metas activas" description="Tu próxima meta aparecerá aquí." />
+            )}
+          </article>
+
+          <article className="rounded-[2rem] border-2 border-mh-dark/5 bg-white p-6 shadow-sm">
+            <div className="mb-5 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="rounded-2xl bg-mh-green/10 p-3 text-mh-green">
+                  <Flag size={24} />
+                </div>
+                <div>
+                  <h2 className="font-display text-2xl font-extrabold text-mh-dark">Misiones pendientes</h2>
+                  <p className="text-sm text-mh-dark/55">Retos activos sincronizados</p>
+                </div>
+              </div>
+              <Link href="/missions" className="text-sm font-bold text-mh-green hover:underline">
+                Ver todas
+              </Link>
+            </div>
+
+            {pendingMissions.length ? (
+              <div className="space-y-3">
+                {pendingMissions.map((mission) => (
+                  <div key={mission.id} className="rounded-2xl bg-mh-cream px-4 py-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="font-semibold text-mh-dark">{mission.title}</p>
+                      <span className="rounded-full bg-mh-gold/15 px-2.5 py-1 text-xs font-bold text-amber-700">
+                        +{mission.xpReward} XP
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm text-mh-dark/55">{mission.description}</p>
+                    <p className="mt-3 text-xs font-bold uppercase tracking-wide text-mh-dark/45">
+                      Progreso actual: {mission.progress}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <EmptyState title="Sin misiones activas" description="No hay misiones disponibles por ahora." />
+            )}
+          </article>
+        </section>
+
+        <section className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+          <article className="rounded-[2rem] border-2 border-mh-dark/5 bg-white p-6 shadow-sm">
+            <div className="mb-5 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="rounded-2xl bg-red-50 p-3 text-red-600">
+                  <Bell size={24} />
+                </div>
+                <div>
+                  <h2 className="font-display text-2xl font-extrabold text-mh-dark">Notificaciones no leídas</h2>
+                  <p className="text-sm text-mh-dark/55">Alertas más recientes</p>
+                </div>
+              </div>
+              <Link href="/notifications" className="text-sm font-bold text-mh-green hover:underline">
+                Abrir centro
+              </Link>
+            </div>
+
+            {unreadNotifications.length ? (
+              <div className="space-y-3">
+                {unreadNotifications.map((notification) => (
+                  <div key={notification.id} className="rounded-2xl bg-mh-cream px-4 py-4">
+                    <p className="font-semibold text-mh-dark">{notification.message}</p>
+                    <p className="mt-2 text-xs font-semibold text-mh-dark/45">
+                      {formatDateTime(notification.createdAt)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <EmptyState title="Todo está al día" description="No hay notificaciones pendientes por revisar." />
+            )}
+          </article>
+
+          <article className="rounded-[2rem] border-2 border-mh-dark/5 bg-white p-6 shadow-sm">
+            <div className="mb-5 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="rounded-2xl bg-mh-gold/15 p-3 text-amber-700">
+                  <Medal size={24} />
+                </div>
+                <div>
+                  <h2 className="font-display text-2xl font-extrabold text-mh-dark">Ranking global</h2>
+                  <p className="text-sm text-mh-dark/55">
+                    {unlockedAchievements} logros desbloqueados en tu perfil
+                  </p>
+                </div>
+              </div>
+              <Link href="/ranking" className="flex items-center gap-1 text-sm font-bold text-mh-green hover:underline">
+                Ver ranking <ChevronRight size={16} />
+              </Link>
+            </div>
+
+            {ranking?.data.length ? (
+              <div className="space-y-3">
+                {ranking.data.map((entry) => (
+                  <div key={entry.userId} className="flex items-center justify-between rounded-2xl bg-mh-cream px-4 py-4">
+                    <div>
+                      <p className="font-semibold text-mh-dark">
+                        #{entry.position} {entry.name}
+                      </p>
+                      <p className="text-sm text-mh-dark/55">
+                        Nivel {entry.level} · {entry.league}
+                      </p>
+                    </div>
+                    <p className="font-display text-xl font-extrabold text-mh-dark">
+                      {entry.totalXp.toLocaleString("es-HN")} XP
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <EmptyState title="Sin ranking disponible" description="Aún no hay suficiente actividad." />
+            )}
+          </article>
+        </section>
+      </div>
+    </ProtectedPage>
   );
 }

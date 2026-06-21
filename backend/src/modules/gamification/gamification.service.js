@@ -42,7 +42,6 @@ export async function addXp(userId, xpAmount, event = null) {
     throw new AppError(500, profileError.message);
   }
 
-  // Registra de dónde provino el XP.
   if (event) {
     const { error: xpEventError } = await supabase
       .from('xp_events')

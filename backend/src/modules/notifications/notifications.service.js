@@ -12,6 +12,24 @@ function mapNotification(row) {
   };
 }
 
+export async function createNotification(userId, { type, message }) {
+  const { data, error } = await supabase
+    .from('notifications')
+    .insert({
+      user_id: userId,
+      type,
+      message
+    })
+    .select('*')
+    .single();
+
+  if (error) {
+    throw new AppError(500, error.message);
+  }
+
+  return mapNotification(data);
+}
+
 export async function listNotifications(userId, readStatus) {
   let query = supabase
     .from('notifications')
@@ -24,8 +42,12 @@ export async function listNotifications(userId, readStatus) {
   }
 
   const { data, error } = await query;
-  if (error) throw new AppError(400, error.message);
-  return data.map(mapNotification);
+
+  if (error) {
+    throw new AppError(400, error.message);
+  }
+
+  return (data ?? []).map(mapNotification);
 }
 
 export async function markAsRead(userId, notificationId) {
@@ -37,7 +59,10 @@ export async function markAsRead(userId, notificationId) {
     .select('*')
     .single();
 
-  if (error || !data) throw new AppError(404, 'Notificacion no encontrada');
+  if (error || !data) {
+    throw new AppError(404, 'Notificacion no encontrada');
+  }
+
   return mapNotification(data);
 }
 
@@ -48,6 +73,11 @@ export async function markAllAsRead(userId) {
     .eq('user_id', userId)
     .eq('read_status', false);
 
-  if (error) throw new AppError(400, error.message);
-  return { message: 'Todas las notificaciones fueron marcadas como leidas' };
+  if (error) {
+    throw new AppError(400, error.message);
+  }
+
+  return {
+    message: 'Todas las notificaciones fueron marcadas como leidas'
+  };
 }

@@ -1,13 +1,31 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
 import Image from "next/image";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Lock, Mail, User, Zap } from "lucide-react";
 import GameButton from "@/components/GameButton";
-import { ApiError, register } from "@/lib/api";
-import { saveSession } from "@/lib/session";
+import ErrorAlert from "@/components/common/ErrorAlert";
+import { ApiClientError } from "@/lib/api";
+import { setCurrentUser, setToken } from "@/lib/session";
+import * as authService from "@/services/auth.service";
+
+function validateRegister(name: string, email: string, password: string) {
+  if (!name.trim()) {
+    return "El nombre es obligatorio.";
+  }
+
+  if (!/\S+@\S+\.\S+/.test(email)) {
+    return "Ingresa un correo válido.";
+  }
+
+  if (password.length < 8) {
+    return "La contraseña debe tener al menos 8 caracteres.";
+  }
+
+  return null;
+}
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -19,15 +37,32 @@ export default function RegisterPage() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    const validationError = validateRegister(name, email, password);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
     setError(null);
     setLoading(true);
 
     try {
-      const { token, user } = await register(name, email, password);
-      saveSession(token, user);
+      const { token, user } = await authService.register({
+        name: name.trim(),
+        email: email.trim(),
+        password,
+      });
+
+      setToken(token);
+      setCurrentUser(user);
       router.push("/dashboard");
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "No se pudo crear la cuenta.");
+    } catch (submissionError) {
+      setError(
+        submissionError instanceof ApiClientError
+          ? submissionError.message
+          : "No se pudo crear la cuenta."
+      );
     } finally {
       setLoading(false);
     }
@@ -109,11 +144,7 @@ export default function RegisterPage() {
               </div>
             </label>
 
-            {error && (
-              <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-semibold text-red-600">
-                {error}
-              </p>
-            )}
+            {error ? <ErrorAlert message={error} /> : null}
 
             <GameButton type="submit" variant="primary" className="mt-2 w-full" disabled={loading}>
               <Zap size={18} /> {loading ? "Creando héroe..." : "Crear cuenta"}
@@ -122,7 +153,7 @@ export default function RegisterPage() {
 
           <p className="mt-6 text-center text-sm text-mh-dark/60">
             ¿Ya tienes cuenta?{" "}
-            <Link href="/" className="font-bold text-mh-green hover:underline">
+            <Link href="/login" className="font-bold text-mh-green hover:underline">
               Inicia sesión
             </Link>
           </p>

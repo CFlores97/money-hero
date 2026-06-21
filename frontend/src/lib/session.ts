@@ -1,23 +1,68 @@
-import type { AuthUser } from "@/lib/api";
+import type { AuthUser } from "@/types/domain";
 
 const TOKEN_KEY = "moneyhero_token";
 const USER_KEY = "moneyhero_user";
 
-export function saveSession(token: string, user: AuthUser) {
-  window.localStorage.setItem(TOKEN_KEY, token);
-  window.localStorage.setItem(USER_KEY, JSON.stringify(user));
+function canUseStorage() {
+  return typeof window !== "undefined";
 }
 
 export function getToken(): string | null {
+  if (!canUseStorage()) {
+    return null;
+  }
+
   return window.localStorage.getItem(TOKEN_KEY);
 }
 
-export function getStoredUser(): AuthUser | null {
-  const raw = window.localStorage.getItem(USER_KEY);
-  return raw ? (JSON.parse(raw) as AuthUser) : null;
+export function setToken(token: string) {
+  if (!canUseStorage()) {
+    return;
+  }
+
+  window.localStorage.setItem(TOKEN_KEY, token);
+}
+
+export function removeToken() {
+  if (!canUseStorage()) {
+    return;
+  }
+
+  window.localStorage.removeItem(TOKEN_KEY);
+}
+
+export function getCurrentUser(): AuthUser | null {
+  if (!canUseStorage()) {
+    return null;
+  }
+
+  const rawUser = window.localStorage.getItem(USER_KEY);
+  if (!rawUser) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(rawUser) as AuthUser;
+  } catch {
+    window.localStorage.removeItem(USER_KEY);
+    return null;
+  }
+}
+
+export function setCurrentUser(user: AuthUser) {
+  if (!canUseStorage()) {
+    return;
+  }
+
+  window.localStorage.setItem(USER_KEY, JSON.stringify(user));
 }
 
 export function clearSession() {
-  window.localStorage.removeItem(TOKEN_KEY);
+  removeToken();
+
+  if (!canUseStorage()) {
+    return;
+  }
+
   window.localStorage.removeItem(USER_KEY);
 }

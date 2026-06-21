@@ -8,8 +8,9 @@ import budgetRoutes from '../modules/budgets/budgets.routes.js';
 import goalRoutes from '../modules/goals/goals.routes.js';
 import gamificationRoutes from '../modules/gamification/gamification.routes.js'
 import missionRoutes from '../modules/missions/missions.routes.js'
-
 import notificationRoutes from '../modules/notifications/notifications.routes.js';
+import rankingRoutes from '../modules/ranking/ranking.routes.js';
+import achievementRoutes from '../modules/achievements/achievements.routes.js';
 
 const router = Router();
 
@@ -19,8 +20,10 @@ router.use('/categories', categoryRoutes);
 router.use('/transactions', transactionRoutes);
 router.use('/budgets', budgetRoutes);
 router.use('/goals', goalRoutes);
-router.use('/gamification', goalRoutes);
+router.use('/gamification', gamificationRoutes);
 router.use('/missions', missionRoutes);
 router.use('/notifications', notificationRoutes);
+router.use('/ranking', rankingRoutes);
+router.use('/achievements', achievementRoutes);
 
 export default router;

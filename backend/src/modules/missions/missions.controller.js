@@ -12,3 +12,16 @@ export async function getMissions(req, res, next) {
     next(error);
   }
 }
+
+export async function completeMission(req, res, next) {
+  try {
+    const result = await missionService.completeMission(
+      req.user.id,
+      req.params.id
+    );
+
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+}
