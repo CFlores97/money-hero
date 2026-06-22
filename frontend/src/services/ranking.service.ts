@@ -1,52 +1,80 @@
 import { apiClient } from "@/lib/api";
 import type { RankingEntry, RankingResponse } from "@/types/domain";
 
-interface RankingApiEntry {
+interface GraphQLRankingUser {
   position: number;
-  user_id: string;
-  user: {
-    name: string;
-    avatar: string | null;
-  };
-  total_xp: number;
+  userId: string;
+  name: string;
+  avatar: string | null;
+  totalXp: number;
   level: number;
   league: string;
 }
 
-interface RankingApiResponse {
-  scope: "global" | "friends";
-  data: RankingApiEntry[];
-  myPosition: RankingApiEntry | null;
+interface GraphQLRankingResponse {
+  data: {
+    rankingGlobal: {
+      myPosition: number | null;
+      users: GraphQLRankingUser[];
+    };
+  };
+  errors?: { message: string }[];
 }
 
-function mapEntry(entry: RankingApiEntry): RankingEntry {
+const GLOBAL_RANKING_QUERY = `
+  query RankingGlobal($limit: Int) {
+    rankingGlobal(limit: $limit) {
+      myPosition
+      users {
+        position
+        userId
+        name
+        avatar
+        totalXp
+        level
+        league
+      }
+    }
+  }
+`;
+
+function mapEntry(entry: GraphQLRankingUser): RankingEntry {
   return {
     position: entry.position,
-    userId: entry.user_id,
-    name: entry.user.name,
-    avatar: entry.user.avatar,
-    totalXp: entry.total_xp,
+    userId: entry.userId,
+    name: entry.name,
+    avatar: entry.avatar,
+    totalXp: entry.totalXp,
     level: entry.level,
     league: entry.league,
   };
 }
 
-function mapRanking(response: RankingApiResponse): RankingResponse {
+export async function getGlobalRanking(limit = 20): Promise<RankingResponse> {
+  const response = await apiClient.post<GraphQLRankingResponse>("/graphql", {
+    query: GLOBAL_RANKING_QUERY,
+    variables: { limit },
+  });
+
+  if (response.data.errors?.length) {
+    throw new Error(response.data.errors[0].message);
+  }
+
+  const ranking = response.data.data.rankingGlobal;
+  const entries = ranking.users.map(mapEntry);
+  const myEntry = entries.find((entry) => entry.position === ranking.myPosition) ?? null;
+
   return {
-    scope: response.scope,
-    data: response.data.map(mapEntry),
-    myPosition: response.myPosition ? mapEntry(response.myPosition) : null,
+    scope: "global",
+    data: entries,
+    myPosition: myEntry,
   };
 }
 
-export function getGlobalRanking(limit = 20) {
-  return apiClient
-    .get<RankingApiResponse>("/ranking/global", {
-      params: { limit },
-    })
-    .then((response) => mapRanking(response.data));
-}
-
-export function getFriendsRanking() {
-  return apiClient.get<RankingApiResponse>("/ranking/friends").then((response) => mapRanking(response.data));
+export async function getFriendsRanking(): Promise<RankingResponse> {
+  return {
+    scope: "friends",
+    data: [],
+    myPosition: null,
+  };
 }
