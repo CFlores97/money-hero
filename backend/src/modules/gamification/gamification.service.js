@@ -65,33 +65,43 @@ export async function addXp(userId, xpAmount, event = null) {
 }
 
 export async function registerDailyActivity(userId) {
-    const {data: profile, error} = await supabase
-        .from('gamification_profiles')
-        .select('streak_days, last_active_at')
-        .eq('user_id', userId)
-        .single();
+  const { data: profile, error } = await supabase
+    .from('gamification_profiles')
+    .select('streak_days, last_active_at')
+    .eq('user_id', userId)
+    .single();
 
-    if(error) throw AppError(400, error,message);
+  if (error) throw new AppError(400, error.message);
 
-    const today = new Date().toISOString().slice(0, 10);
-    const lastDay = profile.last_active_at ? new Date(profile.last_active_at).toISOString().slice(0, 10) : null;
+  const today = new Date().toISOString().slice(0, 10);
 
-    if (lastDay === today) return profile;
+  const lastDay = profile.last_active_at
+    ? new Date(profile.last_active_at).toISOString().slice(0, 10)
+    : null;
 
-    const yesterday = new Date(Date.now() - 86400000).toISOString.slice(0, 10);
-    const streakDays = lastDay === yesterday ? profile.streak_days + 1 : 1;
+  if (lastDay === today) return profile;
 
-    const {data, error: updateError} = await supabase   
-        .from('gamification_profiles')
-        .update({streak_days: streakDays, last_active_at: new Date().toISOString})
-        .eq('user_id', userId)
-        .select('*')
-        .single();
+  const yesterday = new Date(Date.now() - 86400000)
+    .toISOString()
+    .slice(0, 10);
 
-    if(updateError) throw new AppError(400, updateError.message);
+  const streakDays = lastDay === yesterday
+    ? profile.streak_days + 1
+    : 1;
 
-    return data;
+  const { data, error: updateError } = await supabase
+    .from('gamification_profiles')
+    .update({
+      streak_days: streakDays,
+      last_active_at: new Date().toISOString()
+    })
+    .eq('user_id', userId)
+    .select('*')
+    .single();
 
+  if (updateError) throw new AppError(400, updateError.message);
+
+  return data;
 }
 
 export async function progress(userId) {

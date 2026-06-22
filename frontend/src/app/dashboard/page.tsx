@@ -24,6 +24,7 @@ import { compactCurrencyFormatter, formatDateTime } from "@/lib/formatters";
 import { ApiClientError } from "@/lib/api";
 import * as achievementsService from "@/services/achievements.service";
 import * as budgetsService from "@/services/budgets.service";
+import * as dashboardService from "@/services/dashboard.service";
 import * as gamificationService from "@/services/gamification.service";
 import * as goalsService from "@/services/goals.service";
 import * as missionsService from "@/services/missions.service";
@@ -42,6 +43,7 @@ import type {
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [summary, setSummary] = useState<dashboardService.DashboardSummary | null>(null);
   const [gamification, setGamification] = useState<GamificationProgress | null>(null);
   const [budget, setBudget] = useState<Budget | null>(null);
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -57,6 +59,7 @@ export default function DashboardPage() {
       setError(null);
 
       const results = await Promise.allSettled([
+        dashboardService.getDashboardSummary("2026-06"),
         gamificationService.getProgress(),
         budgetsService.getCurrentBudget(),
         goalsService.getGoals("active"),
@@ -66,20 +69,31 @@ export default function DashboardPage() {
         achievementsService.getAchievements(true),
       ]);
 
-      if (!isMounted) {
-        return;
+      if (!isMounted) return;
+
+      const summaryResult = results[0];
+      const gamificationResult = results[1];
+      const budgetResult = results[2];
+      const goalsResult = results[3];
+      const missionsResult = results[4];
+      const notificationsResult = results[5];
+      const rankingResult = results[6];
+      const achievementsResult = results[7];
+
+      if (summaryResult.status === "fulfilled") {
+        setSummary(summaryResult.value);
       }
 
-      const budgetResult = results[1];
+      if (gamificationResult.status === "fulfilled") {
+        setGamification(gamificationResult.value);
+      }
+
       if (budgetResult.status === "rejected") {
         const budgetError = budgetResult.reason;
+
         if (!(budgetError instanceof ApiClientError) || budgetError.statusCode !== 404) {
           setError(budgetError instanceof Error ? budgetError.message : "No se pudo cargar el dashboard.");
         }
-      }
-
-      if (results[0].status === "fulfilled") {
-        setGamification(results[0].value);
       }
 
       if (budgetResult.status === "fulfilled") {
@@ -88,24 +102,24 @@ export default function DashboardPage() {
         setBudget(null);
       }
 
-      if (results[2].status === "fulfilled") {
-        setGoals(results[2].value);
+      if (goalsResult.status === "fulfilled") {
+        setGoals(goalsResult.value);
       }
 
-      if (results[3].status === "fulfilled") {
-        setMissions(results[3].value);
+      if (missionsResult.status === "fulfilled") {
+        setMissions(missionsResult.value);
       }
 
-      if (results[4].status === "fulfilled") {
-        setNotifications(results[4].value);
+      if (notificationsResult.status === "fulfilled") {
+        setNotifications(notificationsResult.value);
       }
 
-      if (results[5].status === "fulfilled") {
-        setRanking(results[5].value);
+      if (rankingResult.status === "fulfilled") {
+        setRanking(rankingResult.value);
       }
 
-      if (results[6].status === "fulfilled") {
-        setAchievements(results[6].value);
+      if (achievementsResult.status === "fulfilled") {
+        setAchievements(achievementsResult.value);
       }
 
       setLoading(false);
@@ -148,30 +162,29 @@ export default function DashboardPage() {
 
         <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
           <StatCard
-            label="XP total"
-            value={gamification ? `${gamification.totalXp.toLocaleString("es-HN")} XP` : "0 XP"}
+            label="Balance"
+            value={compactCurrencyFormatter.format(summary?.totalBalance ?? 0)}
+            icon={<PiggyBank size={22} />}
+            hint="Calculado desde GraphQL"
+          />
+          <StatCard
+            label="Ingresos"
+            value={compactCurrencyFormatter.format(summary?.totalIncome ?? 0)}
             icon={<Zap size={22} />}
-            hint={gamification ? `Faltan ${gamification.xpToNextLevel} XP para el siguiente nivel` : undefined}
+            hint="Ingresos del mes"
           />
           <StatCard
-            label="Liga actual"
-            value={gamification?.league ?? "Sin liga"}
-            icon={<Trophy size={22} />}
-            hint={gamification ? `Nivel ${gamification.level} · Racha ${gamification.streakDays}` : undefined}
-            accentClass="bg-mh-gold/15 text-amber-700"
-          />
-          <StatCard
-            label="Metas activas"
-            value={String(goals.length)}
+            label="Gastos"
+            value={compactCurrencyFormatter.format(summary?.totalExpenses ?? 0)}
             icon={<Target size={22} />}
-            hint="Objetivos con progreso disponible"
+            hint="Gastos del mes"
             accentClass="bg-mh-lime/20 text-mh-green"
           />
           <StatCard
-            label="No leídas"
-            value={String(notifications.length)}
+            label="Alertas"
+            value={String(summary?.activeAlerts ?? 0)}
             icon={<Bell size={22} />}
-            hint="Alertas pendientes por revisar"
+            hint="Alertas desde GraphQL"
             accentClass="bg-red-50 text-red-600"
           />
         </section>
@@ -195,6 +208,7 @@ export default function DashboardPage() {
                 <p className="font-display text-3xl font-extrabold">{gamification?.streakDays ?? 0}</p>
               </div>
             </div>
+
             <div className="mt-6">
               <div className="mb-2 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-white/70">
                 <span>Progreso al siguiente nivel</span>
@@ -242,6 +256,7 @@ export default function DashboardPage() {
                     </p>
                   </div>
                 </div>
+
                 <div className="mt-4">
                   <ProgressBar
                     value={budget.spentAmount}
@@ -250,6 +265,7 @@ export default function DashboardPage() {
                     heightClass="h-4"
                   />
                 </div>
+
                 <p className="mt-3 text-sm font-semibold text-mh-dark/60">
                   {budget.percentageUsed}% usado {budget.alertTriggered ? "· alerta activada" : ""}
                 </p>
@@ -292,7 +308,9 @@ export default function DashboardPage() {
                           {compactCurrencyFormatter.format(goal.targetAmount)}
                         </p>
                       </div>
-                      <span className="text-sm font-bold text-mh-dark/60">{goal.percentageCompleted}%</span>
+                      <span className="text-sm font-bold text-mh-dark/60">
+                        {goal.percentageCompleted}%
+                      </span>
                     </div>
                     <div className="mt-3">
                       <ProgressBar value={goal.currentAmount} max={goal.targetAmount} colorClass="bg-mh-green" />
