@@ -82,14 +82,6 @@ export async function registerDailyActivity(userId) {
     const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
     const streakDays = lastDay === yesterday ? profile.streak_days + 1 : 1;
 
-  const yesterday = new Date(Date.now() - 86400000)
-    .toISOString()
-    .slice(0, 10);
-
-  const streakDays = lastDay === yesterday
-    ? profile.streak_days + 1
-    : 1;
-
   const { data, error: updateError } = await supabase
     .from('gamification_profiles')
     .update({
